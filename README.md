@@ -24,8 +24,6 @@ Free certificate with [letsencrypt](https://letsencrypt.org/) will be used to ge
 
 ```
 ssh my.mail.server.host
-sudo -i
-mkdir -p /etc/letsencrypt
 docker run --rm \
     -p 80:80 \
     -p 443:443 \
