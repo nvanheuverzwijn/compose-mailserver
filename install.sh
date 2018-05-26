@@ -13,7 +13,7 @@ services:
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
   letsencrypt:
     image: blacklabelops/letsencrypt
-    port:
+    ports:
       - "80:80"
       - "443:443"
     volumes:
