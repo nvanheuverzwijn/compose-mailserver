@@ -42,11 +42,11 @@ Your certificate will be generated in your `/etc/letsencrypt` folder.
 Copy this repository on your server and follow the instruction below. You may use git to clone this repository or use the release gzip version on the github page.
 
 ```
-git clone url
-cd url
+git clone https://github.com/nvanheuverzwijn/compose-mailserver.git
+cd compose-mailserver
 export DOMAIN=my.domain.com
 ./install.sh
-docker-compose up
+docker-compose up -d
 ```
 
 ### 5. Add users
