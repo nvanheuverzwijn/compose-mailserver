@@ -19,7 +19,7 @@ services:
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
     environment:
-      LETSENCRYPT_DOMAIN1=${DOMAIN}
+      LETSENCRYPT_DOMAIN1: ${DOMAIN}
   dovecot:
     image: nvanheuverzwijn/dovecot
     volumes:
