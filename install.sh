@@ -11,6 +11,15 @@ services:
       - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+  letsencrypt:
+    image: blacklabelops/letsencrypt
+    port:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt
+    environment:
+      LETSENCRYPT_DOMAIN1=${DOMAIN}
   dovecot:
     image: nvanheuverzwijn/dovecot
     volumes:
