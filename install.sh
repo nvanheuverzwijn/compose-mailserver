@@ -18,6 +18,7 @@ services:
       - "443:443"
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
+      - /var/lib/letsencrypt:/var/lib/letsencrypt
     environment:
       LETSENCRYPT_DOMAIN1: ${DOMAIN}
   dovecot:
