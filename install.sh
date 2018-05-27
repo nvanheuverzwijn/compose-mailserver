@@ -43,7 +43,7 @@ services:
         !include_try local.conf
       DOVECOT_DOVECOT_SQL_CONF_EXT: |
         driver = mysql
-        connect = host=mariadb dbname=mailserver
+        connect = host=mariadb dbname=mailserver user=root password=
         default_pass_scheme = plain
         password_query = SELECT CONCAT(username, '@', domain) AS user, password FROM users WHERE username = '%n' AND domain = '%d'
         iterate_query = SELECT username, domain AS user FROM users
