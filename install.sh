@@ -11,6 +11,7 @@ services:
       - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+
   letsencrypt:
     image: blacklabelops/letsencrypt
     ports:
@@ -21,6 +22,7 @@ services:
       - /var/lib/letsencrypt:/var/lib/letsencrypt
     environment:
       LETSENCRYPT_DOMAIN1: ${DOMAIN}
+
   dovecot:
     image: nvanheuverzwijn/dovecot
     volumes:
@@ -308,4 +310,113 @@ services:
         hosts = mariadb
         dbname = mailserver
         query = SELECT destination FROM virtual_alias_maps WHERE source = '%s'
+
+  memcached:
+    image: memcached:alpine
+
+  sogo:
+    image: nvanheuverzwijn/sogo
+    ports:
+      - "8080:8080"
+    environment:
+      SOGO_CONF: |
+        {
+          SOGoProfileURL = "mysql://root:@mariadb:3306/sogo/sogo_user_profile";
+          OCSFolderInfoURL = "mysql://root:@mariadb:3306/sogo/sogo_folder_info";
+          OCSSessionsFolderURL = "mysql://root:@mariadb:3306/sogo/sogo_sessions_folder";
+          OCSEMailAlarmsFolderURL = "mysql://root:@mariadb:3306/sogo/sogo_alarms_folder";
+          SOGoLanguage = English;
+          SOGoAppointmentSendEMailNotifications = YES;
+          SOGoMailingMechanism = smtp;
+          SOGoSMTPServer = postfix;
+          SOGoTimeZone = UTC;
+          SOGoSentFolderName = Sent;
+          SOGoTrashFolderName = Trash;
+          SOGoDraftsFolderName = Drafts;
+          SOGoIMAPServer = "imaps://dovecot:143/?tls=YES";
+          SOGoSieveServer = "sieve://dovecot:4190/?tls=YES";
+          SOGoIMAPAclConformsToIMAPExt = YES;
+          SOGoVacationEnabled = NO;
+          SOGoForwardEnabled = NO;
+          SOGoSieveScriptsEnabled = NO;
+          SOGoFirstDayOfWeek = 0;
+          SOGoMailMessageCheck = manually;
+          SOGoMailAuxiliaryUserAccountsEnabled = NO;
+          SOGoMemcachedHost = memcached;
+          SOGoUserSources = (
+            {
+              type = sql;
+              id = directory;
+              viewURL = "mysql://root:@mariadb:3306/sogo/users";
+              userPasswordAlgorithm = plain;
+              canAuthenticate = YES;
+            }
+          );
+        }
+      NGINX_CONF: |
+        server {
+          #listen 443;
+          listen 8080;
+          root /usr/lib/GNUstep/SOGo/WebServerResources/;
+          server_name ${DOMAIN}
+          server_tokens off;
+          client_max_body_size 100M;
+          index  index.php index.html index.htm;
+          autoindex off;
+          #ssl on;
+          #ssl_certificate path /path/to/your/certfile; #eg. /etc/ssl/certs/keyfile.crt
+          #ssl_certificate_key /path/to/your/keyfile; #eg /etc/ssl/private/keyfile.key
+          #ssl_session_cache shared:SSL:10m;
+          #optional ssl_stapling on;
+          #optional ssl_stapling_verify on;
+          #optional ssl_trusted_certificate /etc/ssl/private/cacert-stapeling.pem;
+          #optional resolver 127.0.0.11 valid=300s;
+          #optionalresolver_timeout 10s;
+          #ssl_prefer_server_ciphers on;
+          #optional ssl_dhparam /etc/ssl/certs/dhparam.pem;
+          #optional add_header Strict-Transport-Security max-age=63072000;
+          #optional add_header X-Frame-Options DENY;
+          #optional add_header X-Content-Type-Options nosniff;
+          location = / {
+                  #rewrite ^ https://$$server_name/SOGo;
+                  rewrite ^ http://$$server_name:8080/SOGo;
+                  allow all;
+          }
+          location ^~/SOGo {
+                  proxy_pass http://127.0.0.1:20000;
+                  proxy_redirect http://127.0.0.1:20000 default;
+                  # forward user's IP address
+                  proxy_set_header X-Real-IP $$remote_addr;
+                  proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+                  proxy_set_header Host $$host;
+                  proxy_set_header x-webobjects-server-protocol HTTP/1.0;
+                  proxy_set_header x-webobjects-remote-host 127.0.0.1;
+                  proxy_set_header x-webobjects-server-name $$server_name;
+                  proxy_set_header x-webobjects-server-url $$scheme://$$host:8080;
+                  proxy_connect_timeout 90;
+                  proxy_send_timeout 90;
+                  proxy_read_timeout 90;
+                  proxy_buffer_size 4k;
+                  proxy_buffers 4 32k;
+                  proxy_busy_buffers_size 64k;
+                  proxy_temp_file_write_size 64k;
+                  client_max_body_size 50m;
+                  client_body_buffer_size 128k;
+                  break;
+          }
+          location /SOGo.woa/WebServerResources/ {
+                  alias /usr/lib/GNUstep/SOGo/WebServerResources/;
+                  allow all;
+          }
+          location /SOGo/WebServerResources/ {
+                  alias /usr/lib/GNUstep/SOGo/WebServerResources/;
+                  allow all;
+          }
+          location ^/SOGo/so/ControlPanel/Products/([^/]*)/Resources/(.*)$$ {
+                  alias /usr/lib/GNUstep/SOGo/$$1.SOGo/Resources/$$2;
+          }
+          location ^/SOGo/so/ControlPanel/Products/[^/]*UI/Resources/.*\.(jpg|png|gif|css|js)$$ {
+                  alias /usr/lib/GNUstep/SOGo/$$1.SOGo/Resources/$$2;
+          }
+      }
 EOF

@@ -13,3 +13,6 @@ CREATE TABLE virtual_alias_maps (
   source VARCHAR(255) NOT NULL,
   PRIMARY KEY (id)
 );
+
+CREATE DATABASE `sogo` CHARACTER SET='utf8';
+CREATE VIEW sogo.users AS SELECT CONCAT(username, '@', domain) AS c_uid, username AS c_name, password AS c_password, username AS c_cn, CONCAT(username, '@', domain) AS mail, domain AS domain FROM users;
