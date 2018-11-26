@@ -378,21 +378,21 @@ services:
           #optional add_header X-Frame-Options DENY;
           #optional add_header X-Content-Type-Options nosniff;
           location = / {
-                  #rewrite ^ https://$$server_name/SOGo;
-                  rewrite ^ http://$$server_name:8080/SOGo;
+                  #rewrite ^ https://\$\$server_name/SOGo;
+                  rewrite ^ http://\$\$server_name:8080/SOGo;
                   allow all;
           }
           location ^~/SOGo {
                   proxy_pass http://127.0.0.1:20000;
                   proxy_redirect http://127.0.0.1:20000 default;
                   # forward user's IP address
-                  proxy_set_header X-Real-IP $$remote_addr;
-                  proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
-                  proxy_set_header Host $$host;
+                  proxy_set_header X-Real-IP \$\$remote_addr;
+                  proxy_set_header X-Forwarded-For \$\$proxy_add_x_forwarded_for;
+                  proxy_set_header Host \$\$host;
                   proxy_set_header x-webobjects-server-protocol HTTP/1.0;
                   proxy_set_header x-webobjects-remote-host 127.0.0.1;
-                  proxy_set_header x-webobjects-server-name $$server_name;
-                  proxy_set_header x-webobjects-server-url $$scheme://$$host:8080;
+                  proxy_set_header x-webobjects-server-name \$\$server_name;
+                  proxy_set_header x-webobjects-server-url \$\$scheme://\$\$host:8080;
                   proxy_connect_timeout 90;
                   proxy_send_timeout 90;
                   proxy_read_timeout 90;
@@ -412,11 +412,11 @@ services:
                   alias /usr/lib/GNUstep/SOGo/WebServerResources/;
                   allow all;
           }
-          location ^/SOGo/so/ControlPanel/Products/([^/]*)/Resources/(.*)$$ {
-                  alias /usr/lib/GNUstep/SOGo/$$1.SOGo/Resources/$$2;
+          location ^/SOGo/so/ControlPanel/Products/([^/]*)/Resources/(.*)\$\$ {
+                  alias /usr/lib/GNUstep/SOGo/\$\$1.SOGo/Resources/\$\$2;
           }
-          location ^/SOGo/so/ControlPanel/Products/[^/]*UI/Resources/.*\.(jpg|png|gif|css|js)$$ {
-                  alias /usr/lib/GNUstep/SOGo/$$1.SOGo/Resources/$$2;
+          location ^/SOGo/so/ControlPanel/Products/[^/]*UI/Resources/.*\.(jpg|png|gif|css|js)\$\$ {
+                  alias /usr/lib/GNUstep/SOGo/\$\$1.SOGo/Resources/\$\$2;
           }
       }
 EOF
