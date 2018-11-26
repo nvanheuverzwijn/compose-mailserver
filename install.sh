@@ -436,5 +436,5 @@ services:
           location ^/SOGo/so/ControlPanel/Products/[^/]*UI/Resources/.*\.(jpg|png|gif|css|js)\$\$ {
                   alias /usr/lib/GNUstep/SOGo/\$\$1.SOGo/Resources/\$\$2;
           }
-      }
+        }
 EOF
