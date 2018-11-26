@@ -1,7 +1,39 @@
 #!/bin/bash
+
+echo "- Generate docker volumes"
+if [ ! $(docker volume ls -q -f name=letsencrypt_certificates) ]; then
+  docker volume create letsencrypt_certificates
+fi
+if [ ! $(docker volume ls -q -f name=letsencrypt_challenges) ]; then
+  docker volume create letsencrypt_challenges
+fi
+if [ ! $(docker volume ls -q -f name=letsencrypt_vhost) ]; then
+  docker volume create letsencrypt_vhost
+fi
+
+echo "- Generate docker-compose.yml"
 cat > docker-compose.yml <<EOF
 version: '3'
 services:
+  nginx-proxy:
+    image: jwilder/nginx-proxy
+    labels:
+      - "com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - letsencrypt_certificates:/etc/nginx/certs:ro
+      - letsencrypt_vhost:/etc/nginx/vhost.d
+      - letsencrypt_challenges:/usr/share/nginx/html
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+
+  nginx-proxy-companion:
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    volumes:
+      - letsencrypt_certificates:/etc/nginx/certs:rw
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+
   mariadb:
     image: mariadb
     ports:
@@ -12,21 +44,10 @@ services:
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
 
-  letsencrypt:
-    image: blacklabelops/letsencrypt
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /etc/letsencrypt:/etc/letsencrypt
-      - /var/lib/letsencrypt:/var/lib/letsencrypt
-    environment:
-      LETSENCRYPT_DOMAIN1: ${DOMAIN}
-
   dovecot:
     image: nvanheuverzwijn/dovecot
     volumes:
-      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - letsencrypt_certificates:/etc/letsencrypt:ro
       - /etc/ssl:/etc/ssl:ro
       - /var/mail:/var/mail:rw
     ports:
@@ -174,7 +195,7 @@ services:
       - "465:465"
       - "587:587"
     volumes:
-      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - letsencrypt_certificates:/etc/letsencrypt:ro
       - /etc/ssl:/etc/ssl:ro
     environment:
       POSTFIX_CONFIG_MAIN_CF: |
@@ -317,8 +338,11 @@ services:
   sogo:
     image: nvanheuverzwijn/sogo
     ports:
-      - "8080:8080"
+      - "443:443"
+    volumes:
+      - letsencrypt_certificates:/etc/letsencrypt
     environment:
+      VIRTUAL_HOST: "${DOMAIN}"
       SOGO_CONF: |
         {
           SOGoProfileURL = "mysql://root:@mariadb:3306/sogo/sogo_user_profile";
@@ -355,31 +379,25 @@ services:
         }
       NGINX_CONF: |
         server {
-          #listen 443;
-          listen 8080;
+          listen 443;
           root /usr/lib/GNUstep/SOGo/WebServerResources/;
           server_name ${DOMAIN}
           server_tokens off;
           client_max_body_size 100M;
           index  index.php index.html index.htm;
           autoindex off;
-          #ssl on;
-          #ssl_certificate path /path/to/your/certfile; #eg. /etc/ssl/certs/keyfile.crt
-          #ssl_certificate_key /path/to/your/keyfile; #eg /etc/ssl/private/keyfile.key
-          #ssl_session_cache shared:SSL:10m;
-          #optional ssl_stapling on;
-          #optional ssl_stapling_verify on;
-          #optional ssl_trusted_certificate /etc/ssl/private/cacert-stapeling.pem;
-          #optional resolver 127.0.0.11 valid=300s;
-          #optionalresolver_timeout 10s;
-          #ssl_prefer_server_ciphers on;
-          #optional ssl_dhparam /etc/ssl/certs/dhparam.pem;
-          #optional add_header Strict-Transport-Security max-age=63072000;
-          #optional add_header X-Frame-Options DENY;
-          #optional add_header X-Content-Type-Options nosniff;
+          ssl on;
+          ssl_certificate path = /etc/letsencrypt/live/${DOMAIN}/fullchain.pem
+          ssl_certificate_key = /etc/letsencrypt/live/${DOMAIN}/privkey.pem
+          ssl_session_cache shared:SSL:10m;
+          resolver 127.0.0.11 valid=300s;
+          resolver_timeout 10s;
+          ssl_prefer_server_ciphers on;
+          add_header Strict-Transport-Security max-age=63072000;
+          add_header X-Frame-Options DENY;
+          add_header X-Content-Type-Options nosniff;
           location = / {
-                  #rewrite ^ https://\$\$server_name/SOGo;
-                  rewrite ^ http://\$\$server_name:8080/SOGo;
+                  rewrite ^ https://\$\$server_name/SOGo;
                   allow all;
           }
           location ^~/SOGo {
