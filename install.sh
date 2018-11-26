@@ -1,17 +1,5 @@
 #!/bin/bash
 
-echo "- Generate docker volumes"
-if [ ! $(docker volume ls -q -f name=letsencrypt_certificates) ]; then
-  docker volume create letsencrypt_certificates
-fi
-if [ ! $(docker volume ls -q -f name=letsencrypt_challenges) ]; then
-  docker volume create letsencrypt_challenges
-fi
-if [ ! $(docker volume ls -q -f name=letsencrypt_vhost) ]; then
-  docker volume create letsencrypt_vhost
-fi
-
-echo "- Generate docker-compose.yml"
 cat > docker-compose.yml <<EOF
 version: '3'
 volumes:
@@ -36,7 +24,9 @@ services:
     image: jrcs/letsencrypt-nginx-proxy-companion
     volumes:
       - letsencrypt_certificates:/etc/nginx/certs:rw
-      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - letsencrypt_vhost:/etc/nginx/vhost.d
+      - letsencrypt_challenges:/usr/share/nginx/html
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
   mariadb:
     image: mariadb
@@ -51,14 +41,12 @@ services:
   dovecot:
     image: nvanheuverzwijn/dovecot
     volumes:
-      - letsencrypt_certificates:/etc/letsencrypt:ro
+      - letsencrypt_certificates:/letsencrypt:ro
       - /etc/ssl:/etc/ssl:ro
       - /var/mail:/var/mail:rw
     ports:
       - "12000:12000"
       - "12001:12001"
-      - "110:110"
-      - "143:143"
       - "993:993"
       - "995:995"
     environment:
@@ -136,8 +124,8 @@ services:
         }
       DOVECOT_10_SSL: |
         ssl = required
-        ssl_cert = </etc/letsencrypt/live/${DOMAIN}/fullchain.pem
-        ssl_key = </etc/letsencrypt/live/${DOMAIN}/privkey.pem
+        ssl_cert = </letsencrypt/${DOMAIN}.crt
+        ssl_key = </letsencrypt/${DOMAIN}.key
         ssl_dh_parameters_length = 2048
         ssl_protocols = !SSLv3 !TLSv1 !TLSv1.1 TLSv1.2
         ssl_cipher_list = ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256
@@ -199,7 +187,7 @@ services:
       - "465:465"
       - "587:587"
     volumes:
-      - letsencrypt_certificates:/etc/letsencrypt:ro
+      - letsencrypt_certificates:/letsencrypt:ro
       - /etc/ssl:/etc/ssl:ro
     environment:
       POSTFIX_CONFIG_MAIN_CF: |
@@ -217,8 +205,8 @@ services:
         allow_percent_hack = no
         swap_bangpath = no
         recipient_delimiter = +
-        smtpd_tls_cert_file = /etc/letsencrypt/live/${DOMAIN}/fullchain.pem
-        smtpd_tls_key_file = /etc/letsencrypt/live/${DOMAIN}/privkey.pem
+        smtpd_tls_cert_file = /letsencrypt/${DOMAIN}.crt
+        smtpd_tls_key_file = /letsencrypt/${DOMAIN}.key
         smtp_tls_CAfile=/etc/ssl/certs/ca-certificates.crt
         smtp_tls_security_level = may
         smtpd_tls_mandatory_protocols = !SSLv2, !SSLv3, !TLSv1, !TLSv1.1, TLSv1.2
@@ -342,11 +330,11 @@ services:
   sogo:
     image: nvanheuverzwijn/sogo
     ports:
-      - "443:443"
-    volumes:
-      - letsencrypt_certificates:/etc/letsencrypt
+      - "80"
     environment:
       VIRTUAL_HOST: "${DOMAIN}"
+      VIRTUAL_PORT: "80"
+      LETSENCRYPT_HOST: "${DOMAIN}"
       SOGO_CONF: |
         {
           SOGoProfileURL = "mysql://root:@mariadb:3306/sogo/sogo_user_profile";
@@ -361,7 +349,7 @@ services:
           SOGoSentFolderName = Sent;
           SOGoTrashFolderName = Trash;
           SOGoDraftsFolderName = Drafts;
-          SOGoIMAPServer = "imaps://dovecot:143/?tls=YES";
+          SOGoIMAPServer = "imaps://dovecot:993/";
           SOGoSieveServer = "sieve://dovecot:4190/?tls=YES";
           SOGoIMAPAclConformsToIMAPExt = YES;
           SOGoVacationEnabled = NO;
@@ -383,23 +371,15 @@ services:
         }
       NGINX_CONF: |
         server {
-          listen 443;
+          listen 80;
           root /usr/lib/GNUstep/SOGo/WebServerResources/;
           server_name ${DOMAIN}
           server_tokens off;
           client_max_body_size 100M;
           index  index.php index.html index.htm;
           autoindex off;
-          ssl on;
-          ssl_certificate path = /etc/letsencrypt/live/${DOMAIN}/fullchain.pem
-          ssl_certificate_key = /etc/letsencrypt/live/${DOMAIN}/privkey.pem
-          ssl_session_cache shared:SSL:10m;
           resolver 127.0.0.11 valid=300s;
           resolver_timeout 10s;
-          ssl_prefer_server_ciphers on;
-          add_header Strict-Transport-Security max-age=63072000;
-          add_header X-Frame-Options DENY;
-          add_header X-Content-Type-Options nosniff;
           location = / {
                   rewrite ^ https://\$\$server_name/SOGo;
                   allow all;
@@ -414,7 +394,7 @@ services:
                   proxy_set_header x-webobjects-server-protocol HTTP/1.0;
                   proxy_set_header x-webobjects-remote-host 127.0.0.1;
                   proxy_set_header x-webobjects-server-name \$\$server_name;
-                  proxy_set_header x-webobjects-server-url \$\$scheme://\$\$host:8080;
+                  proxy_set_header x-webobjects-server-url \$\$scheme://\$\$host;
                   proxy_connect_timeout 90;
                   proxy_send_timeout 90;
                   proxy_read_timeout 90;
