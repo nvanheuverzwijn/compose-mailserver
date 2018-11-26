@@ -14,6 +14,10 @@ fi
 echo "- Generate docker-compose.yml"
 cat > docker-compose.yml <<EOF
 version: '3'
+volumes:
+  letsencrypt_certificates:
+  letsencrypt_challenges:
+  letsencrypt_vhost:
 services:
   nginx-proxy:
     image: jwilder/nginx-proxy
